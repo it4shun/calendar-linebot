@@ -41,7 +41,14 @@ func main() {
 
 			switch message := event.Message.(type) {
 			case *linebot.TextMessage:
-				replyText := "まじ？！それは熱男なんだけど！"
+				replyText := linebot.NewTemplateMessage(
+					"予定を入力してください",
+					linebot.NewButtonsTemplate(
+						"https://farm5.staticflickr.com/4849/45718165635_328355a940_m.jpg",
+						"Make an appointment",
+						"Please select datetime",
+						linebot.NewDatetimePickerAction("Datetime", "action=sel", "datetime", time.Now(), "", "")
+					)
 				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyText)).Do(); err != nil {
 					log.Print(err)
 				}
