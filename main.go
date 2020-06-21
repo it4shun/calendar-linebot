@@ -39,17 +39,35 @@ func main() {
 				return
 			}
 
-			switch message := event.Message.(type) {
-			case *linebot.TextMessage:
-				replyText := linebot.NewTemplateMessage(
-					"予定を入力してください",
-					linebot.NewButtonsTemplate(
-						"https://farm5.staticflickr.com/4849/45718165635_328355a940_m.jpg",
-						"Make an appointment",
-						"Please select datetime",
-						linebot.NewDatetimePickerAction("Datetime", "action=sel", "datetime", time.Now(), "", "")
-					)
-				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyText)).Do(); err != nil {
+			//switch message := event.Message.(type) {
+			switch event.Type {
+			case linebot.EventTypeMessage:
+				switch message := event.Message.(type) {
+				case *linebot.TextMessage:
+					switch message.Text {
+					case "あ":
+						reply := linebot.NewTextMessage(message.Text)
+						if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+							log.Print(err)
+						}
+					case "カレン":
+						reply := linebot.NewTemplateMessage(
+							"this is a botton template",
+							linebot.NewButtonsTemplate(
+								"https://shunsuarez.com/calendar.jpg",
+								"Calendar",
+								"Please select datetime",
+								linebot.NewDatetimePickerAction("Make an appointment", "id=1", "datetime", "", "", ""),
+							),
+						)
+						if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+							log.Print(err)
+						}
+					}
+				}
+			case linebot.EventTypePostback:
+				reply := linebot.NewTextMessage(string(event.Postback.Params.Datetime))
+				if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
 					log.Print(err)
 				}
 			}
