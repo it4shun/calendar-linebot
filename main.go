@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,10 @@ import (
 	"github.com/line/line-bot-sdk-go/linebot"
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
+
+type Datetime struct {
+	Datetime string `json:"datetime"`
+}
 
 func main() {
 	// HTTP Handlerの初期化
@@ -66,7 +71,12 @@ func main() {
 					}
 				}
 			case linebot.EventTypePostback:
-				reply := linebot.NewTextMessage(string(event.Postback.Params.Datetime))
+				var datetime Datetime
+				dateString := json.Unmarshal([]byte(event.Postback.Params.Datetime), &datetime)
+				reply := linebot.NewTextMessage(dateString)
+				//reply := linebot.NewTextMessage(event.Postback.Params.Datetime)
+				log.Print(dateString)
+				fmt.Print(dateString)
 				if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
 					log.Print(err)
 				}
