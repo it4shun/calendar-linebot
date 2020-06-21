@@ -41,7 +41,7 @@ func main() {
 
 			switch message := event.Message.(type) {
 			case *linebot.TextMessage:
-				replyText := message.Text
+				replyText := "まじ？！それは熱男なんだけど！"
 				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyText)).Do(); err != nil {
 					log.Print(err)
 				}
