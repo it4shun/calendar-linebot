@@ -96,7 +96,7 @@ func main() {
 
 	logger := client.Logger(logName).StandardLogger(logging.Info)
 
-	// Stackdriver Logs.
+	// Stackdriver Logs
 	logger.Println("hello world")
 
 	// port
