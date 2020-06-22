@@ -24,6 +24,21 @@ func main() {
 
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+
+		// gcloud logging
+		ctx := context.Background()
+		projectID := os.Getenv("PROJECT_ID")
+		// logging client 初期化
+		client, err := logging.NewClient(ctx, projectID)
+		if err != nil {
+			log.Fatalf("Failed to create client: %v", err)
+		}
+		defer client.Close()
+		// Sets the name of the log to write to.
+		logName := "calen-log"
+		logger := client.Logger(logName).StandardLogger(logging.Info)
+		// Stackdriver Logs
+		logger.Println("hello world")
 		events, err := bot.ParseRequest(r)
 		if err != nil {
 			if err == linebot.ErrInvalidSignature {
@@ -71,7 +86,7 @@ func main() {
 				//dateString := r.FormValue("id=1")
 				dateString := string(event.Postback.Params.Datetime)
 				reply := linebot.NewTextMessage(dateString)
-				log.Print(dateString)
+				log.Printf("datetime is %v", dateString)
 				fmt.Print(dateString)
 				if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
 					log.Print(err)
@@ -79,25 +94,6 @@ func main() {
 			}
 		}
 	})
-
-	// gcloud logging
-	ctx := context.Background()
-	projectID := os.Getenv("PROJECT_ID")
-
-	// logging client 初期化k
-	client, err := logging.NewClient(ctx, projectID)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	// Sets the name of the log to write to.
-	logName := "calen-log"
-
-	logger := client.Logger(logName).StandardLogger(logging.Info)
-
-	// Stackdriver Logs
-	logger.Println("hello world")
 
 	// port
 	port := os.Getenv("PORT")
