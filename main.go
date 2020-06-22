@@ -12,6 +12,10 @@ import (
 	_ "github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
+type PostRequest struct {
+	PostContent string `json:"post"`
+}
+
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
 	bot, err := linebot.New(
@@ -49,6 +53,14 @@ func main() {
 			return
 		}
 
+		/*var requestBody PostRequest
+		err = json.NewDecoder(r.Body).Decode(&requestBody)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		log.Printf("request is %v", requestBody.PostContent)*/
+
 		for _, event := range events {
 			if event.Type != linebot.EventTypeMessage {
 				return
@@ -66,13 +78,14 @@ func main() {
 							log.Print(err)
 						}
 					case "カレン":
+						log.Printf("%v\n", "Hello Calen !!")
 						reply := linebot.NewTemplateMessage(
 							"this is a botton template",
 							linebot.NewButtonsTemplate(
 								"https://shunsuarez.com/calendar.jpg",
 								"Calendar",
 								"Please select datetime",
-								linebot.NewDatetimePickerAction("Make an appointment", "datetime", "datetime", "", "", ""),
+								linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
 							),
 						)
 						if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
@@ -81,17 +94,17 @@ func main() {
 					}
 				}
 			case linebot.EventTypePostback:
-				//postback := bot.ParseRequest(r)
-				//log.Println(postback)
-				//dateString := r.FormValue("id=1")
-				dateString := string(event.Postback.Params.Datetime)
-				reply := linebot.NewTextMessage(dateString)
-				log.Printf("datetime is %v", dateString)
-				fmt.Print(dateString)
-				if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+				data := event.Postback.Data
+				if data == "Datetime" {
+					data = fmt.Sprintf("here is postback %v\n", *event.Postback.Params)
+				}
+				log.Printf("datetime is %v\n", data)
+				_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(data)).Do()
+				if err != nil {
 					log.Print(err)
 				}
 			}
+
 		}
 	})
 
