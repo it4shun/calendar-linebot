@@ -1,22 +1,19 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/logging"
 	"github.com/line/line-bot-sdk-go/linebot"
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
-type Datetime struct {
-	Datetime string `json:"datetime"`
-}
-
 func main() {
-	// HTTP Handlerの初期化
+	// HTTP Handlerの初期化(LINEBot)
 	handler, err := httphandler.New(
 		os.Getenv("CHANNEL_SECRET"),
 		os.Getenv("CHANNEL_TOKEN"),
@@ -24,6 +21,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// gcloud logging
+	ctx := context.Background()
+	projectID := os.Getenv("PROJECT_ID")
+
+	// logging client 初期化k
+	client, err := logging.NewClient(ctx, projectID)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	// Sets the name of the log to write to.
+	logName := "calen-log"
+
+	logger := client.Logger(logName).StandardLogger(logging.Info)
+
+	// Stackdriver Logs.
+	logger.Println("hello world")
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -62,7 +78,7 @@ func main() {
 								"https://shunsuarez.com/calendar.jpg",
 								"Calendar",
 								"Please select datetime",
-								linebot.NewDatetimePickerAction("Make an appointment", "id=1", "datetime", "", "", ""),
+								linebot.NewDatetimePickerAction("Make an appointment", "datetime", "datetime", "", "", ""),
 							),
 						)
 						if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
@@ -71,10 +87,11 @@ func main() {
 					}
 				}
 			case linebot.EventTypePostback:
-				var datetime Datetime
-				dateString := json.Unmarshal([]byte(event.Postback.Params.Datetime), &datetime)
+				e := r.ParseForm()
+				log.Println(e)
+				dateString := r.FormValue("id=1")
+				//dateString := string(event.Postback.Params.Datetime)
 				reply := linebot.NewTextMessage(dateString)
-				//reply := linebot.NewTextMessage(event.Postback.Params.Datetime)
 				log.Print(dateString)
 				fmt.Print(dateString)
 				if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
