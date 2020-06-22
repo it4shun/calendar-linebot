@@ -9,12 +9,12 @@ import (
 
 	"cloud.google.com/go/logging"
 	"github.com/line/line-bot-sdk-go/linebot"
-	"github.com/line/line-bot-sdk-go/linebot/httphandler"
+	_ "github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
-	handler, err := httphandler.New(
+	bot, err := linebot.New(
 		os.Getenv("CHANNEL_SECRET"),
 		os.Getenv("CHANNEL_TOKEN"),
 	)
@@ -22,36 +22,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// gcloud logging
-	ctx := context.Background()
-	projectID := os.Getenv("PROJECT_ID")
-
-	// logging client 初期化k
-	client, err := logging.NewClient(ctx, projectID)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	// Sets the name of the log to write to.
-	logName := "calen-log"
-
-	logger := client.Logger(logName).StandardLogger(logging.Info)
-
-	// Stackdriver Logs.
-	logger.Println("hello world")
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-		log.Printf("Defaulting to port %s", port)
-	}
-
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
-	handler.HandleEvents(func(events []*linebot.Event, r *http.Request) {
-		bot, err := handler.NewClient()
+	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		events, err := bot.ParseRequest(r)
 		if err != nil {
-			log.Print(err)
+			if err == linebot.ErrInvalidSignature {
+				w.WriteHeader(400)
+			} else {
+				w.WriteHeader(500)
+			}
 			return
 		}
 
@@ -87,10 +66,10 @@ func main() {
 					}
 				}
 			case linebot.EventTypePostback:
-				e := r.ParseForm()
-				log.Println(e)
-				dateString := r.FormValue("id=1")
-				//dateString := string(event.Postback.Params.Datetime)
+				//postback := bot.ParseRequest(r)
+				//log.Println(postback)
+				//dateString := r.FormValue("id=1")
+				dateString := string(event.Postback.Params.Datetime)
 				reply := linebot.NewTextMessage(dateString)
 				log.Print(dateString)
 				fmt.Print(dateString)
@@ -101,9 +80,34 @@ func main() {
 		}
 	})
 
-	// /callback にエンドポイントの定義
-	http.Handle("/callback", handler)
+	// gcloud logging
+	ctx := context.Background()
+	projectID := os.Getenv("PROJECT_ID")
+
+	// logging client 初期化k
+	client, err := logging.NewClient(ctx, projectID)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	// Sets the name of the log to write to.
+	logName := "calen-log"
+
+	logger := client.Logger(logName).StandardLogger(logging.Info)
+
+	// Stackdriver Logs
+	logger.Println("hello world")
+
+	// port
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		log.Printf("Defaulting to port %s", port)
+	}
+
 	// HTTPサーバの起動
 	log.Printf("Listening on port %s", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+
 }
