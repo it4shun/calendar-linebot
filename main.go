@@ -9,7 +9,6 @@ import (
 
 	"cloud.google.com/go/logging"
 	"github.com/line/line-bot-sdk-go/linebot"
-	_ "github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
 type PostRequest struct {
@@ -53,20 +52,7 @@ func main() {
 			return
 		}
 
-		/*var requestBody PostRequest
-		err = json.NewDecoder(r.Body).Decode(&requestBody)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		log.Printf("request is %v", requestBody.PostContent)*/
-
 		for _, event := range events {
-			if event.Type != linebot.EventTypeMessage {
-				return
-			}
-
-			//switch message := event.Message.(type) {
 			switch event.Type {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
@@ -95,9 +81,7 @@ func main() {
 				}
 			case linebot.EventTypePostback:
 				data := event.Postback.Data
-				if data == "Datetime" {
-					data = fmt.Sprintf("here is postback %v\n", *event.Postback.Params)
-				}
+				log.Printf("here is postback %v\n", data)
 				log.Printf("datetime is %v\n", data)
 				_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(data)).Do()
 				if err != nil {
