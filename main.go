@@ -1,18 +1,34 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	"cloud.google.com/go/logging"
 	"github.com/line/line-bot-sdk-go/linebot"
 )
 
 type PostRequest struct {
 	PostContent string `json:"post"`
+}
+
+func CallCalen(bot *linebot.Client, event *linebot.Event) error {
+	reply := linebot.NewTemplateMessage(
+		"this is a botton template",
+		linebot.NewButtonsTemplate(
+			"https://shunsuarez.com/calendar.jpg",
+			"Calendar",
+			"Please select datetime",
+			linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
+		),
+	)
+	_, err := bot.ReplyMessage(event.ReplyToken, reply).Do()
+	if err != nil {
+		log.Print(err)
+		return err
+	}
+	return nil
 }
 
 func main() {
@@ -28,20 +44,7 @@ func main() {
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 
-		// gcloud logging
-		ctx := context.Background()
-		projectID := os.Getenv("PROJECT_ID")
-		// logging client 初期化
-		client, err := logging.NewClient(ctx, projectID)
-		if err != nil {
-			log.Fatalf("Failed to create client: %v", err)
-		}
-		defer client.Close()
-		// Sets the name of the log to write to.
-		logName := "calen-log"
-		logger := client.Logger(logName).StandardLogger(logging.Info)
-		// Stackdriver Logs
-		logger.Println("hello world")
+		// events is defined
 		events, err := bot.ParseRequest(r)
 		if err != nil {
 			if err == linebot.ErrInvalidSignature {
@@ -58,23 +61,14 @@ func main() {
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
 					switch message.Text {
-					case "あ":
-						reply := linebot.NewTextMessage(message.Text)
-						if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+					case "カレン":
+						err = CallCalen(bot, event)
+						if err != nil {
 							log.Print(err)
 						}
-					case "カレン":
-						log.Printf("%v\n", "Hello Calen !!")
-						reply := linebot.NewTemplateMessage(
-							"this is a botton template",
-							linebot.NewButtonsTemplate(
-								"https://shunsuarez.com/calendar.jpg",
-								"Calendar",
-								"Please select datetime",
-								linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
-							),
-						)
-						if _, err = bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+					default:
+						reply := linebot.NewTextMessage("今日も志を忘れず頑張ってください！！")
+						if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
 							log.Print(err)
 						}
 					}
@@ -88,7 +82,6 @@ func main() {
 					log.Print(err)
 				}
 			}
-
 		}
 	})
 
