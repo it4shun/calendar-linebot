@@ -40,6 +40,17 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
+func PostBack(bot *linebot.Client, event *linebot.Event) error {
+	datetime := event.Postback.Params.Datetime
+	log.Printf("here is postback %v\n", datetime)
+	_, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
+	if err != nil {
+		log.Print(err)
+		return err
+	}
+	return nil
+}
+
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
 	bot, err := linebot.New(
@@ -81,11 +92,7 @@ func main() {
 					}
 				}
 			case linebot.EventTypePostback:
-				data := event.Postback.Data
-				log.Printf("here is postback %v\n", data)
-				log.Printf("datetime is %v\n", data)
-				_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(data)).Do()
-				if err != nil {
+				if err = PostBack(bot, event); err != nil {
 					log.Print(err)
 				}
 			}
