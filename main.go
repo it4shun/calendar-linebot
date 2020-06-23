@@ -31,6 +31,15 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
+func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
+	reply := linebot.NewTextMessage("今日も志を忘れず頑張ってください！！")
+	if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+		log.Print(err)
+		return err
+	}
+	return nil
+}
+
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
 	bot, err := linebot.New(
@@ -62,13 +71,11 @@ func main() {
 				case *linebot.TextMessage:
 					switch message.Text {
 					case "カレン":
-						err = CallCalen(bot, event)
-						if err != nil {
+						if err = CallCalen(bot, event); err != nil {
 							log.Print(err)
 						}
 					default:
-						reply := linebot.NewTextMessage("今日も志を忘れず頑張ってください！！")
-						if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
+						if err = DefaultMessage(bot, event); err != nil {
 							log.Print(err)
 						}
 					}
