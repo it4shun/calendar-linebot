@@ -43,6 +43,10 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 func PostBack(bot *linebot.Client, event *linebot.Event) error {
 	datetime := event.Postback.Params.Datetime
 	log.Printf("here is postback %v\n", datetime)
+
+	// Throw a request here
+	// POST https://www.googleapis.com/calendar/v3/calendars/calendarId/acl
+
 	_, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
 	if err != nil {
 		log.Print(err)
