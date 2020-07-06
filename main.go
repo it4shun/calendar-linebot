@@ -7,13 +7,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"os/user"
-	"path/filepath"
 
 	"github.com/line/line-bot-sdk-go/linebot"
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
@@ -32,7 +28,62 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func tokenCacheFile() (string, error) {
+// Retrieve a token, saves the token, then returns the generated client.
+func getClient(config *oauth2.Config) *http.Client {
+	// The file token.json stores the user's access and refresh tokens, and is
+	// created automatically when the authorization flow completes for the first
+	// time.
+	tokFile := "token.json"
+	tok, err := tokenFromFile(tokFile)
+	if err != nil {
+		tok = getTokenFromWeb(config)
+		saveToken(tokFile, tok)
+	}
+	return config.Client(context.Background(), tok)
+}
+
+// Request a token from the web, then returns the retrieved token.
+func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("Go to the following link in your browser then type the "+
+		"authorization code: \n%v\n", authURL)
+
+	var authCode string
+	if _, err := fmt.Scan(&authCode); err != nil {
+		log.Fatalf("Unable to read authorization code: %v", err)
+	}
+
+	tok, err := config.Exchange(context.TODO(), authCode)
+	if err != nil {
+		log.Fatalf("Unable to retrieve token from web: %v", err)
+	}
+	return tok
+}
+
+// Retrieves a token from a local file.
+func tokenFromFile(file string) (*oauth2.Token, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	tok := &oauth2.Token{}
+	err = json.NewDecoder(f).Decode(tok)
+	return tok, err
+}
+
+// Saves a token to a file path.
+func saveToken(path string, token *oauth2.Token) {
+	fmt.Printf("Saving credential file to: %s\n", path)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		log.Fatalf("Unable to cache oauth token: %v", err)
+	}
+	defer f.Close()
+	json.NewEncoder(f).Encode(token)
+}
+
+/*func tokenCacheFile() (string, error) {
 	user, err := user.Current()
 	if err != nil {
 		return "", err
@@ -93,18 +144,6 @@ func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
 	return config.Client(ctx, tok)
 }
 
-func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-	cacheFile, err := tokenCacheFile()
-	errorLog("Unable to get path to cached credential file.: ", err)
-
-	tok, err := tokenFromFile(cacheFile)
-	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
-	}
-	return config.Client(ctx, tok)
-}
-
 func NewGoogleAPI() (*calendar.Service, error) {
 	ctx := context.Background()
 	json, err := ioutil.ReadFile("client-secret.json")
@@ -130,7 +169,7 @@ func NewGoogleAPI() (*calendar.Service, error) {
 		log.Fatal(err)
 	}
 	return NewCalen, nil
-}
+}*/
 
 func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 	reply := linebot.NewTemplateMessage(
@@ -150,19 +189,52 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
+func createEvent(datetime string, title string) *calendar.Event {
+	event := &calendar.Event{
+		Summary:  title,
+		Location: "東京",
+		Start: &calendar.EventDateTime{
+			DateTime: datetime,
+			TimeZone: "Asia/Tokyo",
+		},
+		/*End: &calendar.EventDateTime{
+			Datetime: ,
+			TimeZone: ,
+		}*/
+	}
+	return event
+}
+
 func PostBack(bot *linebot.Client, event *linebot.Event) error {
 	datetime := event.Postback.Params.Datetime
 	log.Printf("here is postback %v\n", datetime)
-	calen, err := NewGoogleAPI()
+	b, err := ioutil.ReadFile("client_credentials.json")
+	if err != nil {
+		log.Fatalf("Unable to read client-secret file: %v", err)
+	}
+
+	// If modifying these scopes, delete your previously saved token.json.
+	config, err := google.ConfigFromJSON(b, calendar.CalendarReadonlyScope)
+	if err != nil {
+		log.Fatalf("Unable to parse client secret file to config: %v", err)
+	}
+	client := getClient(config)
+
+	calendar, err := calendar.New(client)
+	if err != nil {
+		log.Fatalf("Unable to retrieve Calendar client: %v", err)
+	}
+
+	calendarEvent := createEvent(datetime, "未定")
+	_, err = calendar.Events.Insert(os.Getenv("CALENDAR_ID"), calendarEvent).Do()
 	if err != nil {
 		log.Fatal(err)
 	}
-	//_, err = calen.Events.Insert(CALENDAR_ID, createEventData(schedule)).Do()
 
 	// Throw a request here
 	// POST https://www.googleapis.com/calendar/v3/calendars/calendarId/acl
 
-	_, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
+	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
 	if err != nil {
 		log.Print(err)
 		return err
