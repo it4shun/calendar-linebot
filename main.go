@@ -49,13 +49,13 @@ func createEvent(datetime string, title string) *calendar.Event {
 		Summary:  title,
 		Location: "東京",
 		Start: &calendar.EventDateTime{
-			DateTime: datetime,
+			DateTime: datetime + ":00Z",
 			TimeZone: "Asia/Tokyo",
 		},
-		/*End: &calendar.EventDateTime{
-			Datetime: ,
-			TimeZone: ,
-		}*/
+		End: &calendar.EventDateTime{
+			DateTime: datetime + ":30Z",
+			TimeZone: "Asia/Tokyo",
+		},
 	}
 	return event
 }
@@ -69,12 +69,18 @@ func PostBack(bot *linebot.Client, event *linebot.Event) error {
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, calendar.CalendarEventsScope)
+	config, err := google.ConfigFromJSON(b, calendar.CalendarScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 	ctx := context.Background()
-	ts := google.AppEngineTokenSource(ctx, calendar.CalendarEventsScope)
+	ts, err := google.DefaultTokenSource(ctx, calendar.CalendarScope)
+	// start_datatime := schedule.Year + "-" + schedule.Month + "-" + schedule.Day + "T" + schedule.Start + ":00+09:00"
+	// Invalid value for: Invalid format: \\'2017-06-21T15:46:56Z\\ 2020-07-10T22:5200:00' is malformed at \\'Z\\''
+
+	if err != nil {
+		log.Fatalf("Unable to create default token source")
+	}
 	t, err := ts.Token()
 	if err != nil {
 		log.Fatalf("Unable to create token from token source:%v", err)
