@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,6 +8,7 @@ import (
 	"os"
 
 	"github.com/line/line-bot-sdk-go/linebot"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 )
@@ -62,40 +62,42 @@ func createEvent(datetime string, title string) *calendar.Event {
 
 func PostBack(bot *linebot.Client, event *linebot.Event) error {
 	datetime := event.Postback.Params.Datetime
-	log.Printf("here is postback %v\n", datetime)
+
 	b, err := ioutil.ReadFile("client_credentials.json")
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
-	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, calendar.CalendarScope)
+	config, err := google.JWTConfigFromJSON(b, calendar.CalendarScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
-	ctx := context.Background()
-	ts, err := google.DefaultTokenSource(ctx, calendar.CalendarScope)
-	// start_datatime := schedule.Year + "-" + schedule.Month + "-" + schedule.Day + "T" + schedule.Start + ":00+09:00"
-	// Invalid value for: Invalid format: \\'2017-06-21T15:46:56Z\\ 2020-07-10T22:5200:00' is malformed at \\'Z\\''
+	client := config.Client(oauth2.NoContext)
 
-	if err != nil {
-		log.Fatalf("Unable to create default token source")
-	}
-	t, err := ts.Token()
-	if err != nil {
-		log.Fatalf("Unable to create token from token source:%v", err)
-	}
-	client := config.Client(ctx, t)
 	calendar, err := calendar.New(client)
 	if err != nil {
 		log.Fatalf("Unable to retrieve Calendar client: %v", err)
 	}
 
-	calendarEvent := createEvent(datetime, "未定")
-	_, err = calendar.Events.Insert(os.Getenv("CALENDAR_ID"), calendarEvent).Do()
+	events, err := calendar.Events.List("primary").Do()
+
+	if len(events.Items) == 0 {
+		log.Printf("No upcoming events found.")
+	} else {
+		for _, item := range events.Items {
+			date := item.Start.DateTime
+			if date == "" {
+				date = item.Start.Date
+			}
+			fmt.Printf("%v (%v)\n", item.Summary, date)
+		}
+	}
+
+	//calendarEvent := createEvent(datetime, "未定")
+	/*_, err = calendar.Events.Insert(os.Getenv("CALENDAR_ID"), calendarEvent).Do()
 	if err != nil {
 		log.Fatal(err)
-	}
+	}*/
 
 	// Throw a request here
 	// POST https://www.googleapis.com/calendar/v3/calendars/calendarId/acl
