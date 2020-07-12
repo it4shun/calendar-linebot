@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/line/line-bot-sdk-go/linebot"
 	"golang.org/x/oauth2"
@@ -31,7 +33,7 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 		"this is a botton template",
 		linebot.NewButtonsTemplate(
 			"https://shunsuarez.com/calendar.jpg",
-			"Calendar",
+			"Hi! I'm Calen",
 			"Please select datetime",
 			linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
 		),
@@ -42,22 +44,6 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 		return err
 	}
 	return nil
-}
-
-func createEvent(datetime string, title string) *calendar.Event {
-	event := &calendar.Event{
-		Summary:  title,
-		Location: "東京",
-		Start: &calendar.EventDateTime{
-			DateTime: datetime + ":00Z",
-			TimeZone: "Asia/Tokyo",
-		},
-		End: &calendar.EventDateTime{
-			DateTime: datetime + ":30Z",
-			TimeZone: "Asia/Tokyo",
-		},
-	}
-	return event
 }
 
 func PostBack(bot *linebot.Client, event *linebot.Event) error {
@@ -73,14 +59,9 @@ func PostBack(bot *linebot.Client, event *linebot.Event) error {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 	client := config.Client(oauth2.NoContext)
+	cl, err := calendar.New(client)
 
-	calendar, err := calendar.New(client)
-	if err != nil {
-		log.Fatalf("Unable to retrieve Calendar client: %v", err)
-	}
-
-	events, err := calendar.Events.List("primary").Do()
-
+	/*events, err := calendar.Events.List(os.Getenv("CALENDAR_ID")).Do()
 	if len(events.Items) == 0 {
 		log.Printf("No upcoming events found.")
 	} else {
@@ -91,16 +72,25 @@ func PostBack(bot *linebot.Client, event *linebot.Event) error {
 			}
 			fmt.Printf("%v (%v)\n", item.Summary, date)
 		}
-	}
-
-	//calendarEvent := createEvent(datetime, "未定")
-	/*_, err = calendar.Events.Insert(os.Getenv("CALENDAR_ID"), calendarEvent).Do()
-	if err != nil {
-		log.Fatal(err)
 	}*/
 
-	// Throw a request here
-	// POST https://www.googleapis.com/calendar/v3/calendars/calendarId/acl
+	rand.Seed(time.Now().UnixNano())
+	add := &calendar.Event{
+		Summary: "未定",
+		Start: &calendar.EventDateTime{
+			DateTime: datetime + ":00+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+		End: &calendar.EventDateTime{
+			DateTime: datetime + ":30+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+	}
+	log.Printf("add event: %v", add)
+	_, err = cl.Events.Insert(os.Getenv("CALENDAR_ID"), add).Do()
+	if err != nil {
+		log.Printf("calendar insert error: %v", err)
+	}
 
 	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
 	if err != nil {
