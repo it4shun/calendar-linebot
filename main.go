@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/line/line-bot-sdk-go/linebot"
 	"golang.org/x/oauth2"
@@ -28,9 +26,9 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func CallCalen(bot *linebot.Client, event *linebot.Event) error {
+func DatetimeAction(bot *linebot.Client, event *linebot.Event) error {
 	reply := linebot.NewTemplateMessage(
-		"this is a botton template",
+		"this is a button template",
 		linebot.NewButtonsTemplate(
 			"https://shunsuarez.com/calendar.jpg",
 			"Hi! I'm Calen",
@@ -46,8 +44,29 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func PostBack(bot *linebot.Client, event *linebot.Event) error {
+func DatetimePB(bot *linebot.Client, event *linebot.Event, sche *Schedule) error {
+	log.Printf("sche: %v", sche)
 	datetime := event.Postback.Params.Datetime
+	log.Printf("second key: %v", key)
+	title, ok := sche.Title[key]
+	log.Printf("after title: %v", *title)
+	if !ok {
+		log.Print("title is nothing in sche")
+	}
+	add := &calendar.Event{
+		Summary: *title,
+		Start: &calendar.EventDateTime{
+			DateTime: datetime + ":00+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+		End: &calendar.EventDateTime{
+			DateTime: datetime + ":30+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+	}
+	log.Printf("after title: %v", title)
+	log.Printf("start datetime: %v", add.Start)
+	log.Printf("end datetime: %v", add.End)
 
 	b, err := ioutil.ReadFile("client_credentials.json")
 	if err != nil {
@@ -59,46 +78,28 @@ func PostBack(bot *linebot.Client, event *linebot.Event) error {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 	client := config.Client(oauth2.NoContext)
-	cl, err := calendar.New(client)
+	cal, err := calendar.New(client)
 
-	/*events, err := calendar.Events.List(os.Getenv("CALENDAR_ID")).Do()
-	if len(events.Items) == 0 {
-		log.Printf("No upcoming events found.")
-	} else {
-		for _, item := range events.Items {
-			date := item.Start.DateTime
-			if date == "" {
-				date = item.Start.Date
-			}
-			fmt.Printf("%v (%v)\n", item.Summary, date)
-		}
-	}*/
-
-	rand.Seed(time.Now().UnixNano())
-	add := &calendar.Event{
-		Summary: "未定",
-		Start: &calendar.EventDateTime{
-			DateTime: datetime + ":00+09:00",
-			TimeZone: "Asia/Tokyo",
-		},
-		End: &calendar.EventDateTime{
-			DateTime: datetime + ":30+09:00",
-			TimeZone: "Asia/Tokyo",
-		},
-	}
-	log.Printf("add event: %v", add)
-	_, err = cl.Events.Insert(os.Getenv("CALENDAR_ID"), add).Do()
+	r, err := cal.Events.Insert(os.Getenv("CALENDAR_ID"), add).Do()
 	if err != nil {
 		log.Printf("calendar insert error: %v", err)
+	} else {
+		log.Printf("result: %v", r)
 	}
 
-	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
+	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(*title+":"+datetime)).Do()
 	if err != nil {
 		log.Print(err)
 		return err
 	}
 	return nil
 }
+
+type Schedule struct {
+	Title map[string]*string
+}
+
+const key = "get"
 
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
@@ -109,6 +110,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	sche := &Schedule{make(map[string]*string)}
 
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
@@ -129,19 +132,22 @@ func main() {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
-					switch message.Text {
-					case "カレン":
-						if err = CallCalen(bot, event); err != nil {
-							log.Print(err)
-						}
-					default:
-						if err = DefaultMessage(bot, event); err != nil {
-							log.Print(err)
-						}
+					sche.Title[key] = &message.Text
+					log.Printf("first key: %v", key)
+					log.Printf("before title: %v", *sche.Title[key])
+					err = DatetimeAction(bot, event)
+					if err != nil {
+						log.Print(err)
+					}
+				default:
+					_, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage("やめてください")).Do()
+					if err != nil {
+						log.Fatal(err)
 					}
 				}
+
 			case linebot.EventTypePostback:
-				if err = PostBack(bot, event); err != nil {
+				if err = DatetimePB(bot, event, sche); err != nil {
 					log.Print(err)
 				}
 			}
