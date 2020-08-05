@@ -17,6 +17,18 @@ type PostRequest struct {
 	PostContent string `json:"post"`
 }
 
+type Schedule struct {
+	Title map[string]*string
+	Start map[string]*string
+	End   map[string]*string
+}
+
+const (
+	titleKey = "0"
+	startKey = "1"
+	endKey   = "2"
+)
+
 func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	reply := linebot.NewTextMessage("今日も志を忘れず頑張ってください！！")
 	if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
@@ -26,14 +38,20 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func DatetimeAction(bot *linebot.Client, event *linebot.Event) error {
+func DatetimeAction(SorE string, bot *linebot.Client, event *linebot.Event) error {
+	var timing string
+	if SorE == startKey {
+		timing = "start"
+	} else if SorE == endKey {
+		timing = "end"
+	}
 	reply := linebot.NewTemplateMessage(
 		"this is a button template",
 		linebot.NewButtonsTemplate(
 			"https://shunsuarez.com/calendar.jpg",
 			"Hi! I'm Calen",
-			"Please select datetime",
-			linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
+			"When your schedule is "+timing,
+			linebot.NewDatetimePickerAction("Make an appointment", SorE, "datetime", "", "", ""),
 		),
 	)
 	_, err := bot.ReplyMessage(event.ReplyToken, reply).Do()
@@ -45,28 +63,40 @@ func DatetimeAction(bot *linebot.Client, event *linebot.Event) error {
 }
 
 func DatetimePB(bot *linebot.Client, event *linebot.Event, sche *Schedule) error {
-	log.Printf("sche: %v", sche)
-	datetime := event.Postback.Params.Datetime
-	log.Printf("second key: %v", key)
-	title, ok := sche.Title[key]
-	log.Printf("after title: %v", *title)
+	if event.Postback.Data == startKey {
+		sche.Start[startKey] = &event.Postback.Params.Datetime
+		if err := DatetimeAction(endKey, bot, event); err != nil {
+			log.Printf("not call end DatetimePickerAction: %v", err)
+		}
+		return nil
+	}
+	sche.End[endKey] = &event.Postback.Params.Datetime
+	title, ok := sche.Title[titleKey]
 	if !ok {
 		log.Print("title is nothing in sche")
+	}
+	start, ok := sche.Start[startKey]
+	if !ok {
+		log.Print("start is nothing in sche")
+	}
+	end, ok := sche.End[endKey]
+	if !ok {
+		log.Print("end is nothing in sche")
 	}
 	add := &calendar.Event{
 		Summary: *title,
 		Start: &calendar.EventDateTime{
-			DateTime: datetime + ":00+09:00",
+			DateTime: *start + ":00+09:00",
 			TimeZone: "Asia/Tokyo",
 		},
 		End: &calendar.EventDateTime{
-			DateTime: datetime + ":30+09:00",
+			DateTime: *end + ":30+09:00",
 			TimeZone: "Asia/Tokyo",
 		},
 	}
 	log.Printf("after title: %v", title)
-	log.Printf("start datetime: %v", add.Start)
-	log.Printf("end datetime: %v", add.End)
+	log.Printf("start datetime: %v", start)
+	log.Printf("end datetime: %v", end)
 
 	b, err := ioutil.ReadFile("client_credentials.json")
 	if err != nil {
@@ -86,20 +116,15 @@ func DatetimePB(bot *linebot.Client, event *linebot.Event, sche *Schedule) error
 	} else {
 		log.Printf("result: %v", r)
 	}
+	reply := fmt.Sprintf("schedule title: %v\nstart time: %v\nend time:%v\nGoogle Calendar has been updated!", *title, *start, *end)
 
-	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(*title+":"+datetime)).Do()
+	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(reply)).Do()
 	if err != nil {
 		log.Print(err)
 		return err
 	}
 	return nil
 }
-
-type Schedule struct {
-	Title map[string]*string
-}
-
-const key = "get"
 
 func main() {
 	// HTTP Handlerの初期化(LINEBot)
@@ -111,7 +136,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sche := &Schedule{make(map[string]*string)}
+	sche := &Schedule{
+		make(map[string]*string),
+		make(map[string]*string),
+		make(map[string]*string),
+	}
 
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
 	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
@@ -132,10 +161,8 @@ func main() {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
-					sche.Title[key] = &message.Text
-					log.Printf("first key: %v", key)
-					log.Printf("before title: %v", *sche.Title[key])
-					err = DatetimeAction(bot, event)
+					sche.Title[titleKey] = &message.Text
+					err = DatetimeAction(startKey, bot, event)
 					if err != nil {
 						log.Print(err)
 					}
