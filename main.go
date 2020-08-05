@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/line/line-bot-sdk-go/linebot"
 	"golang.org/x/oauth2"
@@ -19,6 +17,18 @@ type PostRequest struct {
 	PostContent string `json:"post"`
 }
 
+type Schedule struct {
+	Title map[string]*string
+	Start map[string]*string
+	End   map[string]*string
+}
+
+const (
+	titleKey = "0"
+	startKey = "1"
+	endKey   = "2"
+)
+
 func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	reply := linebot.NewTextMessage("今日も志を忘れず頑張ってください！！")
 	if _, err := bot.ReplyMessage(event.ReplyToken, reply).Do(); err != nil {
@@ -28,14 +38,20 @@ func DefaultMessage(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func CallCalen(bot *linebot.Client, event *linebot.Event) error {
+func DatetimeAction(SorE string, bot *linebot.Client, event *linebot.Event) error {
+	var timing string
+	if SorE == startKey {
+		timing = "start"
+	} else if SorE == endKey {
+		timing = "end"
+	}
 	reply := linebot.NewTemplateMessage(
-		"this is a botton template",
+		"this is a button template",
 		linebot.NewButtonsTemplate(
 			"https://shunsuarez.com/calendar.jpg",
 			"Hi! I'm Calen",
-			"Please select datetime",
-			linebot.NewDatetimePickerAction("Make an appointment", "Datetime", "datetime", "", "", ""),
+			"When your schedule is "+timing,
+			linebot.NewDatetimePickerAction("Make an appointment", SorE, "datetime", "", "", ""),
 		),
 	)
 	_, err := bot.ReplyMessage(event.ReplyToken, reply).Do()
@@ -46,8 +62,41 @@ func CallCalen(bot *linebot.Client, event *linebot.Event) error {
 	return nil
 }
 
-func PostBack(bot *linebot.Client, event *linebot.Event) error {
-	datetime := event.Postback.Params.Datetime
+func DatetimePB(bot *linebot.Client, event *linebot.Event, sche *Schedule) error {
+	if event.Postback.Data == startKey {
+		sche.Start[startKey] = &event.Postback.Params.Datetime
+		if err := DatetimeAction(endKey, bot, event); err != nil {
+			log.Printf("not call end DatetimePickerAction: %v", err)
+		}
+		return nil
+	}
+	sche.End[endKey] = &event.Postback.Params.Datetime
+	title, ok := sche.Title[titleKey]
+	if !ok {
+		log.Print("title is nothing in sche")
+	}
+	start, ok := sche.Start[startKey]
+	if !ok {
+		log.Print("start is nothing in sche")
+	}
+	end, ok := sche.End[endKey]
+	if !ok {
+		log.Print("end is nothing in sche")
+	}
+	add := &calendar.Event{
+		Summary: *title,
+		Start: &calendar.EventDateTime{
+			DateTime: *start + ":00+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+		End: &calendar.EventDateTime{
+			DateTime: *end + ":30+09:00",
+			TimeZone: "Asia/Tokyo",
+		},
+	}
+	log.Printf("after title: %v", title)
+	log.Printf("start datetime: %v", start)
+	log.Printf("end datetime: %v", end)
 
 	b, err := ioutil.ReadFile("client_credentials.json")
 	if err != nil {
@@ -59,40 +108,17 @@ func PostBack(bot *linebot.Client, event *linebot.Event) error {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
 	client := config.Client(oauth2.NoContext)
-	cl, err := calendar.New(client)
+	cal, err := calendar.New(client)
 
-	/*events, err := calendar.Events.List(os.Getenv("CALENDAR_ID")).Do()
-	if len(events.Items) == 0 {
-		log.Printf("No upcoming events found.")
-	} else {
-		for _, item := range events.Items {
-			date := item.Start.DateTime
-			if date == "" {
-				date = item.Start.Date
-			}
-			fmt.Printf("%v (%v)\n", item.Summary, date)
-		}
-	}*/
-
-	rand.Seed(time.Now().UnixNano())
-	add := &calendar.Event{
-		Summary: "未定",
-		Start: &calendar.EventDateTime{
-			DateTime: datetime + ":00+09:00",
-			TimeZone: "Asia/Tokyo",
-		},
-		End: &calendar.EventDateTime{
-			DateTime: datetime + ":30+09:00",
-			TimeZone: "Asia/Tokyo",
-		},
-	}
-	log.Printf("add event: %v", add)
-	_, err = cl.Events.Insert(os.Getenv("CALENDAR_ID"), add).Do()
+	r, err := cal.Events.Insert(os.Getenv("CALENDAR_ID"), add).Do()
 	if err != nil {
 		log.Printf("calendar insert error: %v", err)
+	} else {
+		log.Printf("result: %v", r)
 	}
+	reply := fmt.Sprintf("schedule title: %v\nstart time: %v\nend time:%v\nGoogle Calendar has been updated!", *title, *start, *end)
 
-	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(datetime)).Do()
+	_, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(reply)).Do()
 	if err != nil {
 		log.Print(err)
 		return err
@@ -108,6 +134,12 @@ func main() {
 	)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	sche := &Schedule{
+		make(map[string]*string),
+		make(map[string]*string),
+		make(map[string]*string),
 	}
 
 	// 実際にRequestを受け取った時に処理を行うHandle関数を定義し、handlerに登録
@@ -129,19 +161,20 @@ func main() {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
-					switch message.Text {
-					case "カレン":
-						if err = CallCalen(bot, event); err != nil {
-							log.Print(err)
-						}
-					default:
-						if err = DefaultMessage(bot, event); err != nil {
-							log.Print(err)
-						}
+					sche.Title[titleKey] = &message.Text
+					err = DatetimeAction(startKey, bot, event)
+					if err != nil {
+						log.Print(err)
+					}
+				default:
+					_, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage("やめてください")).Do()
+					if err != nil {
+						log.Fatal(err)
 					}
 				}
+
 			case linebot.EventTypePostback:
-				if err = PostBack(bot, event); err != nil {
+				if err = DatetimePB(bot, event, sche); err != nil {
 					log.Print(err)
 				}
 			}
